@@ -77,4 +77,4 @@ class RoIAlign3d(RoIAlign):
             z1 = z1 / float(image_depth - 1)
             z2 = z2 / float(image_depth - 1)
             boxes = torch.cat((z1, y1, x1, z2, y2, x2), 1)
-        return CropAndResizeFunction3d.apply(featuremap, boxes, box_ind, self.crop_height, self.crop_width, self.extrapolation_value)
+        return CropAndResizeFunction3d.apply(featuremap, boxes, box_ind, self.crop_height, self.crop_width, self.crop_depth, self.extrapolation_value)
