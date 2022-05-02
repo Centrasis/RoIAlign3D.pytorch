@@ -60,6 +60,53 @@ void crop_and_resize_gpu_forward(
     );
 }
 
+void crop_and_resize_gpu_forward3d(
+    torch::Tensor image,
+    torch::Tensor boxes,           // [y1, x1, y2, x2]
+    torch::Tensor box_index,    // range in [0, batch_size)
+    const float extrapolation_value,
+    const int crop_height,
+    const int crop_width,
+    const int crop_depth,
+    torch::Tensor crops
+) {
+    CHECK_INPUT(image);     CHECK_FLOAT(image);     CHECK_DIMS(image);
+    CHECK_INPUT(boxes);     CHECK_FLOAT(boxes);
+    CHECK_INPUT(box_index); CHECK_INT(box_index);
+    CHECK_INPUT(crops);     CHECK_FLOAT(crops);
+
+    const int batch_size    = image.size(0);
+    const int depth         = image.size(1);
+    const int image_height  = image.size(2);
+    const int image_width   = image.size(3);
+    const int image_depth   = image.size(4);
+
+    const int num_boxes     = boxes.size(0);
+
+    // init output space
+//    THCTensor_resize(state, crops, {num_boxes, depth, crop_height, crop_width});
+
+    crops.resize_({num_boxes, depth, crop_height, crop_width});
+    crops.zero_();
+//    THCudaTensor_resize4d(state, crops, num_boxes, depth, crop_height, crop_width);
+//    THCudaTensor_zero(state, crops);
+
+
+
+//    auto state = globalContext().getTHCState();
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();// THCState_getCurrentStream(state);
+
+    CropAndResizeLaucher3d(
+        image.data<float>(),
+        boxes.data<float>(),
+        box_index.data<int>(),
+        num_boxes, batch_size, image_height, image_width, image_depth,
+        crop_height, crop_width, crop_depth, depth, extrapolation_value,
+        crops.data<float>(),
+        stream
+    );
+}
+
 
 void crop_and_resize_gpu_backward(
     torch::Tensor grads,
@@ -96,14 +143,61 @@ void crop_and_resize_gpu_backward(
         stream
     );
 }
+
+void crop_and_resize_gpu_backward3d(
+    torch::Tensor grads,
+    torch::Tensor boxes,      // [y1, x1, y2, x2]
+    torch::Tensor box_index,    // range in [0, batch_size)
+    torch::Tensor grads_image // resize to [bsize, c, hc, wc]
+) {
+    CHECK_INPUT(grads);     CHECK_FLOAT(grads);
+    CHECK_INPUT(boxes);     CHECK_FLOAT(boxes);
+    CHECK_INPUT(box_index); CHECK_INT(box_index);
+    CHECK_INPUT(grads_image); CHECK_FLOAT(grads_image); CHECK_DIMS(grads_image);
+
+    // shape
+    const int batch_size    = grads_image.size(0);
+    const int depth         = grads_image.size(1);
+    const int image_height  = grads_image.size(2);
+    const int image_width   = grads_image.size(3);
+    const int image_depth   = grads_image.size(4);
+
+    const int num_boxes     = grads.size(0);
+    const int crop_height   = grads.size(2);
+    const int crop_width    = grads.size(3);
+    const int crop_depth    = grads.size(4);
+
+    // init output space
+    grads_image.zero_();
+
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+    CropAndResizeBackpropImageLaucher3d(
+        grads.data<float>(),
+        boxes.data<float>(),
+        box_index.data<int>(),
+        num_boxes, batch_size, image_height, image_width, image_depth,
+        crop_height, crop_width, crop_depth, depth,
+        grads_image.data<float>(),
+        stream
+    );
+}
+
 }
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def(
-      "forward",
+      "forward2d",
       &torch::crop_and_resize_gpu_forward,
       "crop_and_resize_gpu_forward");
   m.def(
-      "backward",
+      "backward2d",
       &torch::crop_and_resize_gpu_backward,
       "crop_and_resize_gpu_backward");
+  m.def(
+      "forward3d",
+      &torch::crop_and_resize_gpu_forward3d,
+      "crop_and_resize_gpu_forward3d");
+  m.def(
+      "backwar32d",
+      &torch::crop_and_resize_gpu_backward3d,
+      "crop_and_resize_gpu_backward3d");
 }
