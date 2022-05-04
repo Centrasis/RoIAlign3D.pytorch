@@ -197,7 +197,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       &torch::crop_and_resize_gpu_forward3d,
       "crop_and_resize_gpu_forward3d");
   m.def(
-      "backwar32d",
+      "backward3d",
       &torch::crop_and_resize_gpu_backward3d,
       "crop_and_resize_gpu_backward3d");
 }
